@@ -1,0 +1,38 @@
+#!/bin/bash
+#
+# usage: ./$0 livesplit-splits.lss > urn-splits.json
+#
+# TODO:
+# handle multiple split time types
+
+if ! hash jq 2>/dev/null ; then
+    echo "no jq"
+    exit 1
+fi
+
+if ! hash xml2json 2>/dev/null ; then
+    echo "no xml2json"
+    exit 1
+fi
+
+
+if [ ! -f "$1" ]; then
+    echo "first arg must be xml file"
+    exit 2
+fi
+
+JSON="$(xml2json < "$1" | jq 'del(.Run.GameIcon)')"
+
+
+# splits part gets confused if there's more than 1 type of split times, we cant really infer an array from an xml when there's on a single element
+jq '{
+"title": (.Run.GameName."$t" + " - " + .Run.CategoryName."$t"),
+    "attempt_count": (.Run.AttemptCount."$t" | tonumber),
+    "start_delay": .Run.Offset."$t",
+    "splits": [ .Run.Segments.Segment[]
+    | {
+        "title": .Name."$t",
+        "time": (if .SplitTimes.SplitTime.RealTime."$t" != null then .SplitTimes.SplitTime.RealTime."$t" else "" end),
+        "best_segment": .BestSegmentTime.RealTime."$t"
+    }]
+}' <<< "$JSON"
